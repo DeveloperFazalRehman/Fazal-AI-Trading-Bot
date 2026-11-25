@@ -1,0 +1,17 @@
+{
+  "name": "fazal-ai-trading-bot",
+  "version": "2.0.0",
+  "description": "Fazal AI Trading Bot - Lightweight 60s Real-Time SMC Signal Scanner APK",
+  "scripts": {
+    "build:android": "npx cap add android && npx capacitor-assets generate --android && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/local-notifications": "^6.1.1"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.1.2"
+  }
+}

@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Fazal AI Trading — Pro SMC Scanner</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card: #131a26;
+      --card-border: #1f2937;
+      --accent: #f59e0b;
+      --green: #10b981;
+      --red: #ef4444;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 14px; padding-bottom: 80px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .brand { font-size: 18px; font-weight: 800; color: var(--accent); letter-spacing: 0.4px; }
+    .sub { font-size: 11px; color: var(--muted); }
+    .status-pill { font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 20px; background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.4); }
+    .status-pill.offline { background: rgba(239,68,68,0.15); color: var(--red); border-color: rgba(239,68,68,0.4); }
+    .offline-banner { display: none; background: #7f1d1d; color: #fecaca; padding: 10px; border-radius: 10px; font-size: 12px; font-weight: 600; margin-bottom: 12px; text-align: center; border: 1px solid #ef4444; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .tab-btn { flex: 1; padding: 9px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--card); color: var(--muted); font-weight: 700; font-size: 12px; cursor: pointer; }
+    .tab-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+    .ticker-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 8px; text-align: center; cursor: pointer; }
+    .ticker-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .sym { font-size: 12px; font-weight: 800; }
+    .price { font-size: 14px; font-weight: 700; margin: 4px 0; }
+    .tf-tag { font-size: 10px; color: var(--muted); }
+    .controls { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+    select, input { background: var(--card); color: var(--text); border: 1px solid var(--card-border); padding: 8px 10px; border-radius: 8px; font-size: 12px; }
+    .btn { background: var(--accent); color: #000; border: none; padding: 9px 12px; border-radius: 8px; font-weight: 800; font-size: 12px; cursor: pointer; }
+    .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--card-border); }
+    .signal-card { background: var(--card); border: 1px solid var(--card-border); border-left: 4px solid var(--accent); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+    .signal-card.BUY { border-left-color: var(--green); }
+    .signal-card.SELL { border-left-color: var(--red); }
+    .sig-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .badge { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; }
+    .badge.BUY { background: rgba(16,185,129,0.2); color: var(--green); }
+    .badge.SELL { background: rgba(239,68,68,0.2); color: var(--red); }
+    .levels { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 12px; margin: 10px 0; background: #0b0f17; padding: 10px; border-radius: 8px; }
+    .reason { font-size: 11px; color: var(--muted); line-height: 1.4; margin-bottom: 10px; }
+    .copy-btn { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--card-border); background: #1f2937; color: #fff; font-weight: 700; font-size: 12px; cursor: pointer; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .stat-row { display: flex; justify-content: space-between; padding: 10px; background: var(--card); border-radius: 10px; margin-bottom: 8px; font-size: 12px; border: 1px solid var(--card-border); }
+    #chart-drawer { display: none; margin-bottom: 14px; border-radius: 12px; overflow: hidden; border: 1px solid var(--card-border); height: 300px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <div style="display:flex;align-items:center;gap:8px;"><img src="app-icon.png" style="width:28px;height:28px;border-radius:6px;background:#fff;object-fit:contain;" /><div class="brand">FAZAL AI TRADING</div></div>
+      <div class="sub">Lightweight 60s Real-Time SMC Engine</div>
+    </div>
+    <div id="netStatus" class="status-pill">LIVE • 60s SCAN</div>
+  </div>
+
+  <div id="offlineBanner" class="offline-banner">
+    OFFLINE — No Internet Connection. Signal generation paused to prevent fake signals.
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('scanner', this)">Live Signals</button>
+    <button class="tab-btn" onclick="switchTab('history', this)">History & Stats</button>
+    <button class="tab-btn" onclick="switchTab('calc', this)">Risk Calc</button>
+  </div>
+
+  <!-- TAB 1: SCANNER -->
+  <div id="tab-scanner" class="panel active">
+    <div class="grid">
+      <div class="ticker-card selected" id="card-XAUUSD" onclick="selectSymbol('XAUUSD')">
+        <div class="sym">XAUUSD</div>
+        <div class="price" id="price-XAUUSD">--</div>
+        <div class="tf-tag">GOLD • PAXG</div>
+      </div>
+      <div class="ticker-card" id="card-XAGUSD" onclick="selectSymbol('XAGUSD')">
+        <div class="sym">XAGUSD</div>
+        <div class="price" id="price-XAGUSD">--</div>
+        <div class="tf-tag">SILVER • KAG</div>
+      </div>
+      <div class="ticker-card" id="card-BTCUSD" onclick="selectSymbol('BTCUSD')">
+        <div class="sym">BTCUSD</div>
+        <div class="price" id="price-BTCUSD">--</div>
+        <div class="tf-tag">BITCOIN • BTC</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <select id="timeframeSelect" onchange="runFullScan(true)">
+        <option value="5m">5M Scalp</option>
+        <option value="15m" selected>15M Intraday</option>
+        <option value="1h">1H Swing</option>
+        <option value="4h">4H Structure</option>
+      </select>
+      <button class="btn" onclick="runFullScan(true)">Scan Now</button>
+      <button class="btn btn-outline" onclick="toggleChart()">Chart</button>
+      <button class="btn btn-outline" onclick="testAlert()">Test Bell</button>
+    </div>
+
+    <div id="chart-drawer"></div>
+
+    <div style="font-size:11px; color:var(--muted); margin-bottom:10px;" id="scanMeta">
+      Next auto-scan in <strong id="countdown">60</strong>s • Strict Real-Market Mode
+    </div>
+
+    <div id="signalsContainer"></div>
+  </div>
+
+  <!-- TAB 2: HISTORY -->
+  <div id="tab-history" class="panel">
+    <div class="stat-row">
+      <span>Total Signals: <strong id="statTotal">0</strong></span>
+      <span style="color:var(--green)">TP Hit: <strong id="statWin">0</strong></span>
+      <span style="color:var(--red)">SL Hit: <strong id="statLoss">0</strong></span>
+      <span>Win Rate: <strong id="statRate">0%</strong></span>
+    </div>
+    <div id="historyContainer"></div>
+  </div>
+
+  <!-- TAB 3: LOT CALCULATOR -->
+  <div id="tab-calc" class="panel">
+    <div class="signal-card">
+      <div style="font-weight:700; margin-bottom:10px;">Exness Lot & Risk Calculator</div>
+      <div style="display:grid; gap:8px;">
+        <label class="sub">Account Balance ($)</label>
+        <input type="number" id="calcBalance" value="500" oninput="calcLot()" />
+        <label class="sub">Risk Per Trade (%)</label>
+        <input type="number" id="calcRisk" value="2" oninput="calcLot()" />
+        <label class="sub">Stop Loss Distance (Pips / Points)</label>
+        <input type="number" id="calcSL" value="30" oninput="calcLot()" />
+        <div style="margin-top:8px; font-size:14px;">
+          Recommended Lot Size: <strong id="lotResult" style="color:var(--accent)">0.03 Lots</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ==========================================================
+  // 1. STRICT REAL-DATA ENDPOINTS (NO SIMULATED FAKE CANDLES)
+  // ==========================================================
+  const SYMBOL_MAP = {
+    XAUUSD: { binance: 'PAXGUSDT', decimals: 2, minGap: 1.5 },
+    XAGUSD: { binance: 'XAGUSDT', fallbackCrypto: 'ETHUSDT', decimals: 3, minGap: 0.05 },
+    BTCUSD: { binance: 'BTCUSDT', decimals: 2, minGap: 80.0 }
+  };
+
+  let activeSymbol = 'XAUUSD';
+  let countdown = 60;
+  let signals = JSON.parse(localStorage.getItem('fazal_signals_v2') || '[]');
+  let chartLoaded = false;
+
+  // AudioContext Chime for instant alerts even without external mp3
+  function playAlertSound() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (e) {}
+    if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+  }
+
+  async function sendNativeNotification(title, body) {
+    playAlertSound();
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+        const { LocalNotifications } = window.Capacitor.Plugins;
+        await LocalNotifications.schedule({
+          notifications: [{
+            title: title,
+            body: body,
+            id: Math.floor(Date.now() % 100000),
+            schedule: { at: new Date(Date.now() + 200) },
+            sound: 'default',
+            smallIcon: 'ic_stat_icon_config_sample'
+          }]
+        });
+      } else if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, { body });
+      }
+    } catch (err) {
+      console.warn('Notification error:', err);
+    }
+  }
+
+  function updateNetworkUI(isOnline) {
+    const pill = document.getElementById('netStatus');
+    const banner = document.getElementById('offlineBanner');
+    if (isOnline) {
+      pill.textContent = 'LIVE • 60s SCAN';
+      pill.classList.remove('offline');
+      banner.style.display = 'none';
+    } else {
+      pill.textContent = 'OFFLINE • PAUSED';
+      pill.classList.add('offline');
+      banner.style.display = 'block';
+    }
+  }
+
+  window.addEventListener('online', () => { updateNetworkUI(true); runFullScan(false); });
+  window.addEventListener('offline', () => updateNetworkUI(false));
+
+  // Fetch OHLC candles directly (only ~3 KB per request)
+  async function fetchCandles(symbol, interval) {
+    const cfg = SYMBOL_MAP[symbol];
+    let url = `https://api.binance.com/api/v3/klines?symbol=${cfg.binance}&interval=${interval}&limit=60`;
+    let res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok && symbol === 'XAGUSD') {
+      // Fallback live Silver spot quote via Coinbase if Binance XAG pair unavailable
+      const cbRes = await fetch('https://api.coinbase.com/v2/prices/XAG-USD/spot', { cache: 'no-store' });
+      if (!cbRes.ok) throw new Error('Silver feed unavailable');
+      const cbData = await cbRes.json();
+      const spot = parseFloat(cbData.data.amount);
+      return [{ open: spot, high: spot, low: spot, close: spot, volume: 0, spotOnly: true }];
+    }
+    if (!res.ok) throw new Error('API Error ' + res.status);
+    const raw = await res.json();
+    return raw.map(c => ({
+      time: c[0],
+      open: parseFloat(c[1]),
+      high: parseFloat(c[2]),
+      low: parseFloat(c[3]),
+      close: parseFloat(c[4]),
+      volume: parseFloat(c[5])
+    }));
+  }
+
+  // ==========================================================
+  // 2. ACCURATE SMC ENGINE (SWEEP + FVG + STRUCTURE + ATR)
+  // ==========================================================
+  function calculateEMA(closes, period) {
+    const k = 2 / (period + 1);
+    let ema = closes[0];
+    for (let i = 1; i < closes.length; i++) {
+      ema = closes[i] * k + ema * (1 - k);
+    }
+    return ema;
+  }
+
+  function calculateATR(candles, period = 14) {
+    if (candles.length < period + 1) return 0;
+    let trs = [];
+    for (let i = 1; i < candles.length; i++) {
+      const h = candles[i].high;
+      const l = candles[i].low;
+      const pc = candles[i - 1].close;
+      trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+    }
+    return trs.slice(-period).reduce((a, b) => a + b, 0) / period;
+  }
+
+  function analyzeSMC(symbol, tf, candles) {
+    if (!candles || candles.length < 30 || candles[0].spotOnly) return null;
+
+    const closes = candles.map(c => c.close);
+    const ema50 = calculateEMA(closes.slice(-50), 50);
+    const atr = calculateATR(candles, 14);
+    const last = candles[candles.length - 2]; // Use closed candle to avoid repaint/whipsaw!
+    const prev1 = candles[candles.length - 3];
+    const prev2 = candles[candles.length - 4];
+    const currentPrice = candles[candles.length - 1].close;
+
+    const swingWindow = candles.slice(-25, -4);
+    const swingHigh = Math.max(...swingWindow.map(c => c.high));
+    const swingLow = Math.min(...swingWindow.map(c => c.low));
+
+    const dec = SYMBOL_MAP[symbol].decimals;
+
+    // BULLISH SETUP: Liquidity Sweep below Swing Low + Bullish FVG + Above EMA50 trend filter
+    const sweptLow = prev1.low < swingLow || last.low < swingLow;
+    const bullishFVG = last.low > prev2.high && (last.low - prev2.high) >= atr * 0.25;
+    const bullishClose = last.close > last.open && last.close > prev1.high;
+
+    if (sweptLow && bullishFVG && bullishClose && currentPrice >= ema50 * 0.998) {
+      const entry = currentPrice;
+      const sl = Math.min(last.low, prev1.low, swingLow) - atr * 0.4;
+      const risk = Math.abs(entry - sl);
+      if (risk <= 0) return null;
+      return {
+        id: `${symbol}-${tf}-${last.time}`,
+        symbol,
+        tf,
+        side: 'BUY',
+        entry: entry.toFixed(dec),
+        sl: sl.toFixed(dec),
+        tp1: (entry + risk * 1.5).toFixed(dec),
+        tp2: (entry + risk * 2.5).toFixed(dec),
+        tp3: (entry + risk * 4.0).toFixed(dec),
+        status: 'ACTIVE',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        date: new Date().toLocaleDateString(),
+        reason: `Sell-Side Liquidity Sweep (${swingLow.toFixed(dec)}) + Confirmed Closed-Candle Bullish FVG + EMA50 Alignment`
+      };
+    }
+
+    // BEARISH SETUP: Liquidity Sweep above Swing High + Bearish FVG + Below EMA50 trend filter
+    const sweptHigh = prev1.high > swingHigh || last.high > swingHigh;
+    const bearishFVG = last.high < prev2.low && (prev2.low - last.high) >= atr * 0.25;
+    const bearishClose = last.close < last.open && last.close < prev1.low;
+
+    if (sweptHigh && bearishFVG && bearishClose && currentPrice <= ema50 * 1.002) {
+      const entry = currentPrice;
+      const sl = Math.max(last.high, prev1.high, swingHigh) + atr * 0.4;
+      const risk = Math.abs(sl - entry);
+      if (risk <= 0) return null;
+      return {
+        id: `${symbol}-${tf}-${last.time}`,
+        symbol,
+        tf,
+        side: 'SELL',
+        entry: entry.toFixed(dec),
+        sl: sl.toFixed(dec),
+        tp1: (entry - risk * 1.5).toFixed(dec),
+        tp2: (entry - risk * 2.5).toFixed(dec),
+        tp3: (entry - risk * 4.0).toFixed(dec),
+        status: 'ACTIVE',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        date: new Date().toLocaleDateString(),
+        reason: `Buy-Side Liquidity Sweep (${swingHigh.toFixed(dec)}) + Confirmed Closed-Candle Bearish FVG + EMA50 Alignment`
+      };
+    }
+
+    return null;
+  }
+
+  function updateSignalStatuses(symbol, livePrice) {
+    let changed = false;
+    signals.forEach(sig => {
+      if (sig.symbol !== symbol || sig.status !== 'ACTIVE') return;
+      const tp1 = parseFloat(sig.tp1);
+      const sl = parseFloat(sig.sl);
+      if (sig.side === 'BUY') {
+        if (livePrice >= tp1) { sig.status = 'TP HIT'; changed = true; sendNativeNotification(`TP HIT: ${symbol} BUY`, `Target ${sig.tp1} reached!`); }
+        else if (livePrice <= sl) { sig.status = 'SL HIT'; changed = true; }
+      } else {
+        if (livePrice <= tp1) { sig.status = 'TP HIT'; changed = true; sendNativeNotification(`TP HIT: ${symbol} SELL`, `Target ${sig.tp1} reached!`); }
+        else if (livePrice >= sl) { sig.status = 'SL HIT'; changed = true; }
+      }
+    });
+    if (changed) saveAndRender();
+  }
+
+  async function runFullScan(manual = false) {
+    if (!navigator.onLine) {
+      updateNetworkUI(false);
+      return;
+    }
+
+    const tf = document.getElementById('timeframeSelect').value;
+    const symbols = ['XAUUSD', 'XAGUSD', 'BTCUSD'];
+
+    try {
+      for (const sym of symbols) {
+        const candles = await fetchCandles(sym, tf);
+        const latest = candles[candles.length - 1].close;
+        document.getElementById(`price-${sym}`).textContent = latest.toFixed(SYMBOL_MAP[sym].decimals);
+
+        updateSignalStatuses(sym, latest);
+
+        const setup = analyzeSMC(sym, tf, candles);
+        if (setup && !signals.some(s => s.id === setup.id)) {
+          signals.unshift(setup);
+          if (signals.length > 50) signals.pop();
+          saveAndRender();
+          sendNativeNotification(
+            `${setup.side} SIGNAL: ${setup.symbol} (${setup.tf.toUpperCase()})`,
+            `Entry: ${setup.entry} | SL: ${setup.sl} | TP1: ${setup.tp1}`
+          );
+        }
+      }
+      updateNetworkUI(true);
+      if (manual) renderSignals();
+    } catch (err) {
+      console.warn('Network/API error — skipping simulated fallback:', err);
+      updateNetworkUI(false);
+    }
+  }
+
+  function saveAndRender() {
+    localStorage.setItem('fazal_signals_v2', JSON.stringify(signals));
+    renderSignals();
+    renderHistory();
+  }
+
+  function renderSignals() {
+    const container = document.getElementById('signalsContainer');
+    const filtered = signals.filter(s => s.symbol === activeSymbol);
+    if (filtered.length === 0) {
+      container.innerHTML = `<div class="signal-card"><div class="reason">No confirmed high-probability SMC setup on <strong>${activeSymbol}</strong> right now. Scanner is monitoring real candles every 60 seconds...</div></div>`;
+      return;
+    }
+    container.innerHTML = filtered.slice(0, 10).map(s => `
+      <div class="signal-card ${s.side}">
+        <div class="sig-top">
+          <div><span class="badge ${s.side}">${s.side}</span> <strong>${s.symbol}</strong> • ${s.tf.toUpperCase()}</div>
+          <div style="font-size:11px; color:var(--accent); font-weight:700;">${s.status} • ${s.time}</div>
+        </div>
+        <div class="levels">
+          <div>Entry: <strong>${s.entry}</strong></div>
+          <div style="color:var(--red)">SL: <strong>${s.sl}</strong></div>
+          <div style="color:var(--green)">TP1: <strong>${s.tp1}</strong></div>
+          <div style="color:var(--green)">TP2: <strong>${s.tp2}</strong></div>
+        </div>
+        <div class="reason">${s.reason}</div>
+        <button class="copy-btn" onclick="copySignal('${s.id}')">Copy Signal for MT5</button>
+      </div>
+    `).join('');
+  }
+
+  function renderHistory() {
+    const wins = signals.filter(s => s.status === 'TP HIT').length;
+    const losses = signals.filter(s => s.status === 'SL HIT').length;
+    const closed = wins + losses;
+    document.getElementById('statTotal').textContent = signals.length;
+    document.getElementById('statWin').textContent = wins;
+    document.getElementById('statLoss').textContent = losses;
+    document.getElementById('statRate').textContent = closed ? Math.round((wins / closed) * 100) + '%' : '0%';
+
+    document.getElementById('historyContainer').innerHTML = signals.map(s => `
+      <div class="stat-row">
+        <div><strong>${s.symbol}</strong> ${s.side} (${s.tf})<br><span class="sub">${s.date} ${s.time}</span></div>
+        <div style="text-align:right">Entry: ${s.entry}<br><strong style="color:${s.status==='TP HIT'?'var(--green)':s.status==='SL HIT'?'var(--red)':'var(--accent)'}">${s.status}</strong></div>
+      </div>
+    `).join('');
+  }
+
+  function copySignal(id) {
+    const s = signals.find(x => x.id === id);
+    if (!s) return;
+    const text = `FAZAL AI SIGNAL\n${s.symbol} ${s.side} (${s.tf.toUpperCase()})\nEntry: ${s.entry}\nSL: ${s.sl}\nTP1: ${s.tp1}\nTP2: ${s.tp2}\nTP3: ${s.tp3}`;
+    navigator.clipboard.writeText(text);
+    alert('Signal copied for Exness MT5!');
+  }
+
+  function selectSymbol(sym) {
+    activeSymbol = sym;
+    document.querySelectorAll('.ticker-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById(`card-${sym}`).classList.add('selected');
+    renderSignals();
+  }
+
+  function switchTab(tab, btn) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    btn.classList.add('active');
+    if (tab === 'history') renderHistory();
+  }
+
+  function toggleChart() {
+    const drawer = document.getElementById('chart-drawer');
+    if (drawer.style.display === 'block') {
+      drawer.style.display = 'none';
+      drawer.innerHTML = '';
+      chartLoaded = false;
+    } else {
+      drawer.style.display = 'block';
+      const tvSym = activeSymbol === 'BTCUSD' ? 'BINANCE:BTCUSDT' : activeSymbol === 'XAGUSD' ? 'OANDA:XAGUSD' : 'OANDA:XAUUSD';
+      drawer.innerHTML = `<iframe src="https://s.tradingview.com/widgetembed/?symbol=${tvSym}&interval=15&theme=dark&style=1" style="width:100%;height:100%;border:0;"></iframe>`;
+      chartLoaded = true;
+    }
+  }
+
+  function testAlert() {
+    sendNativeNotification('Fazal AI Alert Test', 'Sound, vibration & popup notifications are working properly!');
+  }
+
+  function calcLot() {
+    const bal = parseFloat(document.getElementById('calcBalance').value) || 0;
+    const riskPct = parseFloat(document.getElementById('calcRisk').value) || 0;
+    const slPips = parseFloat(document.getElementById('calcSL').value) || 1;
+    const riskUSD = bal * (riskPct / 100);
+    const lot = Math.max(0.01, (riskUSD / (slPips * 10))).toFixed(2);
+    document.getElementById('lotResult').textContent = `${lot} Lots ($${riskUSD.toFixed(2)} Risk)`;
+  }
+
+  // Exact 60-second lightweight loop
+  setInterval(() => {
+    countdown--;
+    if (countdown <= 0) {
+      countdown = 60;
+      runFullScan(false);
+    }
+    document.getElementById('countdown').textContent = countdown;
+  }, 1000);
+
+  // Initial startup
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+  renderSignals();
+  renderHistory();
+  runFullScan(true);
+</script>
+</body>
+</html>
